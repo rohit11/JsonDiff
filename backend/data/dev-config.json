@@ -1,0 +1,9 @@
+{
+    "UserTable": {
+      "username": "enabled",
+      "email": "optional",
+      "password": "@@@@@@2"
+
+    }
+  }
+  
