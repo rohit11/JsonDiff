@@ -16,8 +16,7 @@
       "key": "3",
       "status": "active",
       "type": "number",
-      "description": "This is a description for column_3 in Table_1.",
-      "newentry": "newentry. newentry newentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentrynewentry"
+      "description": "This is a description for column_3 in Table_1."
     },
     {
       "key": "4",
@@ -30,7 +29,7 @@
       "status": "active",
       "type": "date",
       "description": "This is a description for column_5 in Table_1.",
-      "moreDetails": "New details added"
+      "moreDetails": ""
     },
     {
       "key": "6",
@@ -433,50 +432,6 @@
       "status": "optional",
       "type": "array",
       "description": "This is a description for column_4 in Table_4."
-    },
-    {
-      "key": "5",
-      "status": "pending",
-      "type": "date",
-      "description": "This is a description for column_5 in Table_4."
-    },
-    {
-      "key": "6",
-      "status": "pending",
-      "type": "string",
-      "description": "This is a description for column_6 in Table_4."
-    },
-    {
-      "key": "7",
-      "status": "inactive",
-      "type": "date",
-      "description": "This is a description for column_7 in Table_4."
-    },
-    {
-      "key": "8",
-      "status": "enabled",
-      "type": "string",
-      "description": "This is a description for column_8 in Table_4."
-    }
-  ],
-  "Table_5": [
-    {
-      "key": "1",
-      "status": "inactive",
-      "type": "date",
-      "description": "This is a description for column_1 in Table_5."
-    },
-    {
-      "key": "2",
-      "status": "inactive",
-      "type": "array",
-      "description": "This is a description for column_2 in Table_5."
-    },
-    {
-      "key": "3",
-      "status": "required",
-      "type": "string",
-      "description": "This is a description for column_3 in Table_5."
     }
   ]
 }

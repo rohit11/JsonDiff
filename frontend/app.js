@@ -3,6 +3,7 @@ let targetData = {};
 let rowsPerPage = 20; // ✅ Change here if you want 10, 20, 50, 100 per page
 let filteredSourceData = {};
 let filteredTargetData = {};
+const tableFilteredRows = {};
 
 async function loadTables() {
   showLoading(true);
@@ -345,13 +346,6 @@ function clearAllSelections() {
   document.querySelectorAll('.tableCheckbox, .columnCheckbox').forEach(cb => cb.checked = false);
 }
 
-function filterTables() {
-  const searchValue = document.getElementById('searchBox').value.toLowerCase();
-  document.querySelectorAll('.table-container').forEach(container => {
-    const tableName = container.dataset.tableName;
-    container.style.display = tableName.includes(searchValue) ? 'block' : 'none';
-  });
-}
 
 function bindAccordionHandlers() {
   document.querySelectorAll('.accordion-header').forEach(header => {
@@ -381,20 +375,112 @@ function toggleAllTables(expand) {
   });
 }
 
-function filterTables() {
-  const searchValue = document.getElementById('searchBox').value.toLowerCase();
-  const filterValue = document.getElementById('filterSelect').value;
+function renderFilteredRows(container, tableName, rows, page = 1) {
+  const start = (page - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const paginatedRows = rows.slice(start, end);
 
-  filteredSourceData = {};
-  filteredTargetData = {};
+  const allKeysSet = new Set();
+  rows.forEach(row => Object.keys(row).forEach(k => {
+    if (k !== 'key') allKeysSet.add(k);
+  }));
+  const allKeys = Array.from(allKeysSet);
+
+  let html = `<table><tr><th>Select</th><th>Key</th>`;
+  allKeys.forEach(k => html += `<th>${capitalizeFirstLetter(k)}</th>`);
+  html += `</tr>`;
+
+  const targetRows = targetData[tableName] || [];
+  const targetMap = new Map(targetRows.map(r => [r.key, r]));
+
+  paginatedRows.forEach(row => {
+    const matchingTargetRow = targetMap.get(row.key);
+    let rowClass = '';
+    let fieldClasses = {};
+
+    if (!matchingTargetRow) {
+      rowClass = 'missing-row';
+    } else {
+      let allSame = true;
+      for (const key of allKeys) {
+        if (excludeKeys.includes(key)) continue;
+        if ((row[key] || '') !== (matchingTargetRow[key] || '')) {
+          allSame = false;
+          fieldClasses[key] = 'child-diff-highlight';
+        }
+      }
+      rowClass = allSame ? 'same-row' : 'diff-row';
+    }
+
+    html += `<tr class="${rowClass}">
+      <td><input type="checkbox" class="columnCheckbox" data-table="${tableName}" data-key="${row.key}"></td>
+      <td>${row.key}</td>`;
+
+    allKeys.forEach(k => {
+      html += `<td class="${fieldClasses[k] || ''}">${row[k] || ''}</td>`;
+    });
+
+    html += `</tr>`;
+
+    if (rowClass === 'diff-row' && matchingTargetRow) {
+      html += `<tr class="child-diff-row">
+        <td style="text-align:center; font-size: 12px; font-weight: bold;">Dest Row</td>
+        <td>${matchingTargetRow.key || ''}</td>`;
+
+      allKeys.forEach(k => {
+        const highlight = !excludeKeys.includes(k) && (row[k] || '') !== (matchingTargetRow[k] || '');
+        html += `<td class="${highlight ? 'child-diff-highlight' : ''}">${matchingTargetRow[k] || ''}</td>`;
+      });
+
+      html += `</tr>`;
+    }
+  });
+
+  html += `</table>`;
+
+  const totalPages = Math.ceil(rows.length / rowsPerPage);
+  if (totalPages > 1) {
+    html += `<div class="pagination">`;
+    for (let p = 1; p <= totalPages; p++) {
+      html += `<button class="${p === page ? 'current-page' : ''}" onclick="changeFilteredPage('${tableName}', ${p})">${p}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+
+
+function hasDifferences(sourceRow, targetRow) {
+  for (const key in sourceRow) {
+    if (excludeKeys.includes(key)) continue;
+    if ((sourceRow[key] || '') !== (targetRow[key] || '')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function filterTables() {
+  const tablesDiv = document.getElementById('tables');
+  tablesDiv.innerHTML = '';
+
+  const searchValue = document.getElementById('searchBox')?.value?.toLowerCase() || '';
+  const filterValue = document.getElementById('filterSelect')?.value || 'all';
+
+  Object.keys(tableFilteredRows).forEach(key => delete tableFilteredRows[key]); // clear previous
 
   for (const [tableName, sourceRows] of Object.entries(sourceData)) {
-    if (!tableName.toLowerCase().includes(searchValue)) continue;
+    if (searchValue && !tableName.toLowerCase().includes(searchValue)) continue;
 
-    const filteredRows = sourceRows.filter(row => {
-      const matchingTargetRow = (targetData[tableName] || []).find(r => r.key === row.key);
+    const targetRows = targetData[tableName] || [];
+    const targetMap = new Map(targetRows.map(r => [r.key, r]));
+
+    const filteredRows = sourceRows.filter(sourceRow => {
+      const matchingTargetRow = targetMap.get(sourceRow.key);
       const isMissing = !matchingTargetRow;
-      const isDiff = matchingTargetRow && hasDifferences(row, matchingTargetRow);
+      const isDiff = matchingTargetRow && hasDifferences(sourceRow, matchingTargetRow);
       const isSame = matchingTargetRow && !isDiff;
 
       if (filterValue === 'all') return true;
@@ -406,18 +492,57 @@ function filterTables() {
       return false;
     });
 
-    if (filteredRows.length > 0) {
-      filteredSourceData[tableName] = filteredRows;
-      filteredTargetData[tableName] = targetData[tableName] || [];
-    }
-  }
+    if (filteredRows.length === 0) continue;
 
-  // ✅ Re-render based on filtered
-  refreshTableUI(filteredSourceData, filteredTargetData);
+    tableFilteredRows[tableName] = filteredRows; // 🔥 Save for pagination use
+
+    // Render table
+    const tableContainer = document.createElement('div');
+    tableContainer.classList.add('table-container');
+    tableContainer.dataset.tableName = tableName.toLowerCase();
+
+    const header = document.createElement('div');
+    header.classList.add('accordion-header');
+    header.innerHTML = `▶ <strong>${tableName}</strong>`;
+
+    const content = document.createElement('div');
+    content.classList.add('accordion-content');
+    content.style.display = 'none';
+
+    tableContainer.appendChild(header);
+    tableContainer.appendChild(content);
+    tablesDiv.appendChild(tableContainer);
+
+    renderFilteredRows(content, tableName, filteredRows, 1); // first page
+
+    header.onclick = () => {
+      if (content.style.display === 'block') {
+        content.style.display = 'none';
+        header.innerHTML = `▶ <strong>${tableName}</strong>`;
+      } else {
+        content.style.display = 'block';
+        header.innerHTML = `▼ <strong>${tableName}</strong>`;
+      }
+    };
+  }
 }
+
 
 
 function bindStaticListeners() {
   document.getElementById('filterSelect').addEventListener('change', filterTables);
+  document.getElementById('searchBox').addEventListener('input', filterTables);
 }
 window.onload = bindStaticListeners;
+
+window.changeFilteredPage = (tableName, page) => {
+  const targetContainer = [...document.querySelectorAll('.table-container')]
+    .find(c => c.dataset.tableName === tableName.toLowerCase())
+    ?.querySelector('.accordion-content');
+
+  if (!targetContainer) return;
+
+  const rows = tableFilteredRows[tableName] || [];
+  renderFilteredRows(targetContainer, tableName, rows, page);
+};
+
