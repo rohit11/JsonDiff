@@ -12,4 +12,23 @@ async function uploadJson(env, jsonData) {
   await fs.writeFile(path, JSON.stringify(jsonData, null, 2), 'utf-8');
 }
 
-module.exports = { getJson, uploadJson };
+// ✅ New function: Download JSON from API and save locally
+async function downloadAndSaveJson(env, lob) {
+  try {
+    const url = `https://your-api-domain.com/api/json/${lob}/${env}`; 
+    // 🔥 Example: Adjust this to match your real API structure
+
+    const response = await axios.get(url);
+    const jsonData = response.data;
+
+    const localPath = JSON_PATHS[env]; // Example: ./data/dev.json
+    await fs.writeFile(localPath, JSON.stringify(jsonData, null, 2), 'utf-8');
+
+    console.log(`✅ Downloaded and saved JSON for env: ${env} at ${localPath}`);
+  } catch (error) {
+    console.error('❌ Failed to download and save JSON:', error.message);
+    throw error;
+  }
+}
+
+module.exports = { getJson, uploadJson, downloadAndSaveJson };
