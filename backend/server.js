@@ -36,64 +36,69 @@ app.get('/env-data', async (req, res) => {
 // Migrate selected tables or rows
 app.post('/migrate', async (req, res) => {
   try {
-    const { sourceEnv, targetEnv } = req.body;
-    const selectedTables = req.body.selectedTables || [];
-    const selectedRows = req.body.selectedRows || [];
+    const { sourceEnv, targetEnv, selectedTables = [], selectedRows = [] } = req.body;
 
     const sourceJson = await getJson(sourceEnv) || {};
     let targetJson = await getJson(targetEnv);
-    if (!targetJson || typeof targetJson !== 'object') {
-      targetJson = {}; // ensure targetJson is at least empty object
-    }
+    if (!targetJson || typeof targetJson !== 'object') targetJson = {};
 
-    // Backup first
+    // Backup
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFileName = `backup-${targetEnv}-${timestamp}.json`;
-    const backupFilePath = path.join(__dirname, 'data', backupFileName);
+    const backupFilePath = path.join(__dirname, 'data', `backup-${targetEnv}-${timestamp}.json`);
     await fs.promises.writeFile(backupFilePath, JSON.stringify(targetJson, null, 2));
 
-    let tablesCopied = 0;
-    let rowsCopied = 0;
+    let tablesCopied = 0, rowsCopied = 0, tablesDeleted = 0, rowsDeleted = 0;
 
-    // Handle full table selection
-    if (selectedTables.length > 0) {
-      selectedTables.forEach(table => {
-        const sourceRows = sourceJson[table];
-        if (Array.isArray(sourceRows)) {
-          targetJson[table] = JSON.parse(JSON.stringify(sourceRows)); // Deep copy
-          tablesCopied += 1;
-          rowsCopied += sourceRows.length;
+    // ✅ Handle full table selection
+    for (const table of selectedTables) {
+      if (sourceJson[table]) {
+        targetJson[table] = JSON.parse(JSON.stringify(sourceJson[table]));
+        tablesCopied++;
+        rowsCopied += sourceJson[table].length;
+      } else {
+        if (targetJson[table]) {
+          delete targetJson[table];
+          tablesDeleted++;
         }
-      });
+      }
     }
 
-    // Handle specific rows selection
-    if (selectedRows.length > 0) {
-      selectedRows.forEach(({ table, key }) => {
-        const sourceRows = sourceJson[table];
-        if (!Array.isArray(sourceRows)) return; // skip if source table missing
+    // ✅ Handle specific row selection
+    for (const { table, key, sourceRow, targetRow } of selectedRows) {
+      if (!targetJson[table]) targetJson[table] = [];
+      const index = targetJson[table].findIndex(row => row.key === key);
 
-        const sourceRow = sourceRows.find(row => row.key === key);
-        if (!sourceRow) return; // skip if source row missing
-
-        if (!Array.isArray(targetJson[table])) {
-          targetJson[table] = []; // create target table if missing
-          tablesCopied += 1; // since creating table
-        }
-        const targetRows = targetJson[table];
-        const existingIndex = targetRows.findIndex(row => row.key === key);
-        if (existingIndex !== -1) {
-          targetRows[existingIndex] = JSON.parse(JSON.stringify(sourceRow)); // overwrite
+      if (sourceRow && targetRow) {
+        // Update existing row
+        if (index !== -1) {
+          targetJson[table][index] = sourceRow;
         } else {
-          targetRows.push(JSON.parse(JSON.stringify(sourceRow))); // insert
+          targetJson[table].push(sourceRow);
         }
-        rowsCopied += 1;
-      });
+        rowsCopied++;
+      } else if (!sourceRow && targetRow) {
+        // Delete if row only in target
+        if (index !== -1) {
+          targetJson[table].splice(index, 1);
+          rowsDeleted++;
+        }
+        // Remove table if empty
+        if (targetJson[table].length === 0) {
+          delete targetJson[table];
+          tablesDeleted++;
+        }
+      }
     }
 
     await uploadJson(targetEnv, targetJson);
 
-    res.json({ status: 'success', tablesCopied, rowsCopied });
+    res.json({
+      status: 'success',
+      tablesCopied,
+      rowsCopied,
+      tablesDeleted,
+      rowsDeleted
+    });
   } catch (error) {
     console.error('Migration Failed:', error);
     res.status(500).json({ error: 'Failed to migrate data' });

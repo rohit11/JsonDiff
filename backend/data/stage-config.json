@@ -29,7 +29,9 @@
         "status": "active",
         "type": "date",
         "description": "This is a description for column_5 in Table_1.",
-        "moreDetails": "New details added"
+        "moreDetails": "New details added",
+        "moreAntotherDetails": "New details added"
+
       },
       {
         "key": "6",
