@@ -7,47 +7,50 @@
 </head>
 
 <body>
-  <div class="container">
-    <h1>JSON Migration Tool</h1>
 
-    <!-- Source and Target Selectors -->
-    <div class="selectors">
-      <div>
-        <label>Source Env:</label>
-        <select id="sourceEnv">
-          <option value="stage">Stage</option>
-          <option value="dev">Dev</option>
-        </select>
-      </div>
+  <!-- Static Header -->
+  <h1>JSON Migration Tool</h1>
 
-      <div>
-        <label>Target Env:</label>
-        <select id="targetEnv">
-          <option value="prod">Prod</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Buttons for Action -->
-    <div style="text-align:center;">
-      <button onclick="loadTables()">Load Tables</button>
-      <button onclick="migrate()">Migrate Selected</button>
-      <button onclick="toggleAllTables(true)">Expand All</button>
-      <button onclick="toggleAllTables(false)">Collapse All</button>
-    </div>
-
-    <div class="filter-container">
-      <label for="filterSelect"><strong>Filter Rows:</strong></label>
-      <select id="filterSelect">
-        <option value="all">All</option>
-        <option value="diff">Only Differences (Yellow Rows)</option>
-        <option value="missing">Only Missing (Red Rows)</option>
-        <option value="diff-missing">Only Differences and Missing</option>
-        <option value="same">Only Same Entries (Green Rows)</option>
+  <!-- Static Selectors -->
+  <div class="selectors">
+    <div>
+      <label>Source Env:</label>
+      <select id="sourceEnv">
+        <option value="stage">Stage</option>
+        <option value="dev">Dev</option>
       </select>
     </div>
-    
 
+    <div>
+      <label>Target Env:</label>
+      <select id="targetEnv">
+        <option value="prod">Prod</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Static Buttons -->
+  <div class="top-buttons" style="text-align:center;">
+    <button onclick="loadTables()">Load Tables</button>
+    <button onclick="migrate()">Migrate Selected</button>
+    <button onclick="toggleAllTables(true)">Expand All</button>
+    <button onclick="toggleAllTables(false)">Collapse All</button>
+  </div>
+
+  <!-- Static Filter -->
+  <div class="filter-container">
+    <label for="filterSelect"><strong>Filter Rows:</strong></label>
+    <select id="filterSelect">
+      <option value="all">All</option>
+      <option value="diff">Only Differences (Yellow Rows)</option>
+      <option value="missing">Only Missing (Red Rows)</option>
+      <option value="diff-missing">Only Differences and Missing</option>
+      <option value="same">Only Same Entries (Green Rows)</option>
+    </select>
+  </div>
+
+  <!-- ✅ Scrollable Content Container -->
+  <div class="container">
     <!-- Tables Section -->
     <div id="tables"></div>
 
@@ -62,16 +65,15 @@
   </div>
 
   <!-- Cell Detail Modal -->
-<div id="cellModal" class="modal">
-  <div class="modal-content">
-    <span class="close" onclick="closeCellModal()">&times;</span>
-    <div id="cellContent"></div>
+  <div id="cellModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeCellModal()">&times;</span>
+      <div id="cellContent"></div>
+    </div>
   </div>
-</div>
-
 
   <!-- JavaScript -->
   <script src="app.js"></script>
-  
+
 </body>
 </html>

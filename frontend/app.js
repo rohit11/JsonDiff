@@ -6,6 +6,11 @@ const excludeTables = ['audit_log', 'tracking_history'];
 const excludeKeys = ['lastUpdated', 'timestamp', 'id'];
 const tableFilteredRows = {};
 
+const tablePrimaryKeys = {
+  key: 'key',
+  // fallback handled if missing
+};
+
 // ✅ Utility Functions
 function capitalizeFirstLetter(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -54,6 +59,32 @@ function toggleAllTables(expand) {
       content.style.display = 'none';
       header.innerHTML = header.innerHTML.replace('▼', '▶');
     }
+  });
+}
+
+function bindSelectionGuards() {
+  document.querySelectorAll('.columnCheckbox').forEach(rowCb => {
+    rowCb.addEventListener('change', () => {
+      const table = rowCb.dataset.table;
+      const key = rowCb.dataset.key;
+      const cellCbs = document.querySelectorAll(`.cellCheckbox[data-table='${table}'][data-key='${key}']`);
+      if (rowCb.checked && [...cellCbs].some(cb => cb.checked)) {
+        alert('⚠️ Cannot select full row and individual columns in the same row.');
+        rowCb.checked = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('.cellCheckbox').forEach(cellCb => {
+    cellCb.addEventListener('change', () => {
+      const table = cellCb.dataset.table;
+      const key = cellCb.dataset.key;
+      const rowCb = document.querySelector(`.columnCheckbox[data-table='${table}'][data-key='${key}']`);
+      if (cellCb.checked && rowCb?.checked) {
+        alert('⚠️ Cannot select individual column when full row is selected.');
+        cellCb.checked = false;
+      }
+    });
   });
 }
 
@@ -206,14 +237,13 @@ function renderRows(container, tableName, rows, page = 1) {
   });
   const allKeys = Array.from(allKeysSet);
 
-  let html = `<table><tr><th>Select</th><th>Key</th>`;
+  let html = `<table><tr><th class="select-column">Select</th><th>Key</th>`;
   allKeys.forEach(k => html += `<th>${capitalizeFirstLetter(k)}</th>`);
   html += `</tr>`;
 
   paginatedRows.forEach(({ sourceRow, targetRow }) => {
     const rowKey = (sourceRow || targetRow)?.key;
     let rowClass = '';
-    let fieldClasses = {};
 
     const isMissingInTarget = sourceRow && !targetRow;
     const isMissingInSource = targetRow && !sourceRow;
@@ -228,40 +258,51 @@ function renderRows(container, tableName, rows, page = 1) {
       rowClass = 'same-row';
     }
 
-    // ✅ Render the main source row
+    // ✅ Render main source row
     html += `<tr class="${rowClass}">`;
 
-    // ✅ Always show the Select checkbox, even if source is missing
-    html += `<td><input type="checkbox" class="columnCheckbox" data-table="${tableName}" data-key="${rowKey}"></td>`;
+    // ✅ Handle checkbox visibility
+    if (isSame) {
+      html += `<td></td>`; // No checkbox if identical
+    } else {
+      html += `<td class="select-column"><input type="checkbox" class="columnCheckbox" data-table="${tableName}" data-key="${rowKey}"></td>`;
+    }
 
     if (isMissingInSource) {
-      // Source missing → empty Key and empty fields
       html += `<td></td>`;
-      allKeys.forEach(() => {
-        html += `<td></td>`;
-      });
+      allKeys.forEach(() => html += `<td></td>`);
     } else {
-      // Source available
       html += `<td onclick="showCellModal(\`${rowKey}\`)">${rowKey || ''}</td>`;
       allKeys.forEach(k => {
         const val = sourceRow?.[k] || '';
         const className = (rowClass === 'diff-row' && sourceRow && targetRow && val !== targetRow[k] && !excludeKeys.includes(k))
-        ? 'child-diff-highlight'
-        : '';      
-        html += `<td class="${className}" onclick="showCellModal(\`${val.replace(/`/g, '\\`')}\`)">${val}</td>`;
+          ? 'child-diff-highlight'
+          : '';
+
+        if (isSame) {
+          html += `<td onclick="showCellModal(\`${val.replace(/`/g, '\\`')}\`)">${val}</td>`;
+        } else {
+          html += `<td class="${className}">
+            <input type="checkbox" class="cellCheckbox"
+                   data-table="${tableName}"
+                   data-key="${rowKey}"
+                   data-column="${k}"
+                   style="margin-right:4px; vertical-align:middle;">
+            <span onclick="showCellModal(\`${val.replace(/`/g, '\\`')}\`)">${val}</span>
+          </td>`;
+        }
       });
     }
 
     html += `</tr>`;
 
-    // ✅ Render child destination row if needed
+    // ✅ Child destination row (if needed)
     if (isDiff || isMissingInSource) {
       const childClass = isMissingInSource ? 'missing-row' : 'child-diff-row';
 
       html += `<tr class="${childClass}">`;
       html += `<td><em>Destination</em></td>`;
       html += `<td>${targetRow?.key || ''}</td>`;
-
       allKeys.forEach(k => {
         const sourceVal = sourceRow?.[k] || '';
         const targetVal = targetRow?.[k] || '';
@@ -269,7 +310,6 @@ function renderRows(container, tableName, rows, page = 1) {
         const cellClass = isDiffField ? 'child-diff-highlight' : '';
         html += `<td class="${cellClass}" onclick="showCellModal(\`${targetVal.replace(/`/g, '\\`')}\`)">${targetVal}</td>`;
       });
-
       html += `</tr>`;
     }
   });
@@ -286,7 +326,11 @@ function renderRows(container, tableName, rows, page = 1) {
   }
 
   container.innerHTML = html;
+
+  // ✅ Rebind guards after rendering
+  bindSelectionGuards();
 }
+
 
 
 
@@ -320,14 +364,44 @@ async function migrate() {
 
   const selectedTables = Array.from(document.querySelectorAll('.tableCheckbox:checked')).map(cb => cb.getAttribute('data-table'));
   const selectedRowCheckboxes = Array.from(document.querySelectorAll('.columnCheckbox:checked'));
+  const selectedCellCheckboxes = Array.from(document.querySelectorAll('.cellCheckbox:checked'));
 
+  const cellSelectionMap = new Map(); // key: `${table}_${key}` → grouped columns
+
+for (const cb of selectedCellCheckboxes) {
+  const table = cb.getAttribute('data-table');
+  const key = cb.getAttribute('data-key');
+  const column = cb.getAttribute('data-column');
+  const mapKey = `${table}_${key}`;
+
+  if (!cellSelectionMap.has(mapKey)) {
+    const sourceRow = sourceData[table]?.find(r => r.key === key);
+    const targetRow = targetData[table]?.find(r => r.key === key);
+    cellSelectionMap.set(mapKey, {
+      table,
+      key,
+      columns: [column],
+      sourceRow,
+      targetRow
+    });
+  } else {
+    cellSelectionMap.get(mapKey).columns.push(column);
+  }
+}
+
+const selectedCells = Array.from(cellSelectionMap.values());
   const sourceEnv = document.getElementById('sourceEnv').value;
   const targetEnv = document.getElementById('targetEnv').value;
 
-  if (selectedTables.length === 0 && selectedRowCheckboxes.length === 0) {
-    alert('⚠️ Please select at least one table or row to migrate.');
+  if (
+    selectedTables.length === 0 &&
+    selectedRowCheckboxes.length === 0 &&
+    document.querySelectorAll('.cellCheckbox:checked').length === 0
+  ) {
+    alert('⚠️ Please select at least one table, row, or column to migrate.');
     return;
   }
+  
 
   // ✅ Build full selected row payload with source/target row reference
   const selectedRows = selectedRowCheckboxes.map(cb => {
@@ -335,6 +409,9 @@ async function migrate() {
     const key = cb.getAttribute('data-key');
     const sourceRow = sourceData[table]?.find(r => r.key === key);
     const targetRow = targetData[table]?.find(r => r.key === key);
+
+    console.log(`[ROW SELECTED] table=${table}, key=${key}`);
+    console.log("→ Found sourceRow:", sourceRow);
 
     return {
       table,
@@ -344,7 +421,7 @@ async function migrate() {
     };
   });
 
-  let totalRows = selectedRows.length;
+  let totalRows = selectedRows.length + selectedCells.length;
 
   for (const table of selectedTables) {
     totalRows += (sourceData[table]?.length || 0);
@@ -363,8 +440,9 @@ async function migrate() {
       sourceEnv,
       targetEnv,
       selectedTables,
-      selectedRows  // contains full row info
-    })
+      selectedRows,
+      selectedCells  // ✅ NEW
+    })    
   });
 
   const result = await response.json();
@@ -452,7 +530,8 @@ function renderSimpleTargetTable(container, tableName, rows, page = 1) {
   paginatedRows.forEach(row => {
     html += `<tr><td>${row.key || ''}</td>`;
     allKeys.forEach(k => {
-      html += `<td>${row[k] || ''}</td>`;
+      const val = row[k] || '';
+      html += `<td onclick="showCellModal(\`${val.replace(/`/g, '\\`')}\`)">${val}</td>`;
     });
     html += `</tr>`;
   });

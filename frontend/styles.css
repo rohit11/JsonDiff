@@ -10,11 +10,12 @@ body {
     background: white;
     padding: 20px;
     border-radius: 8px;
-    width: 95vw;                 /* Uses 95% of the viewport width */
-    max-width: none;             /* Remove the fixed 1200px limit */
+    min-width: 150vw;             /* Allow full screen width */
+    width: fit-content;           /* Expand as needed based on table width */
     margin: auto;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    overflow-x: auto;            /* Allows horizontal scrolling if needed */
+    overflow-x: auto;             /* Enable horizontal scroll */
+    height: calc(100vh - 200px);
   }
   
   
@@ -258,3 +259,28 @@ body {
     word-wrap: break-word;
   }
   
+  .cellCheckbox {
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  /* Narrower "Select" column */
+.table-content table td:first-child,
+.table-content table th:first-child {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  text-align: center;
+}
+.select-column {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  text-align: center;
+}
+
+h1, .selectors, .filter-container, .top-buttons {
+  padding: 10px 20px;
+  background: #f9f9f9;
+  z-index: 10;
+}
