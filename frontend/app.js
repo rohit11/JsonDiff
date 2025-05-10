@@ -190,17 +190,18 @@ function createTableContainer(tableName, filteredRows) {
   content.style.display = 'none';
 
   // 🆕 Add Select Entire Table Checkbox
-  const selectAllWrapper = document.createElement('div');
-  selectAllWrapper.style.margin = '10px 0';
-  selectAllWrapper.innerHTML = `
-    <label><input type="checkbox" class="tableCheckbox" data-table="${tableName}"> Select Entire Table</label>
-  `;
-  content.appendChild(selectAllWrapper);
+const selectAllWrapper = document.createElement('div');
+selectAllWrapper.classList.add('select-all-wrapper'); // ← helpful for styling
+selectAllWrapper.innerHTML = `
+  <label><input type="checkbox" class="tableCheckbox" data-table="${tableName}"> Select Entire Table</label>
+`;
 
-  // 🆕 Add table-content div for rows
-  const tableContentDiv = document.createElement('div');
-  tableContentDiv.classList.add('table-content');
-  content.appendChild(tableContentDiv);
+const tableContentDiv = document.createElement('div');
+tableContentDiv.classList.add('table-content');
+tableContentDiv.id = `table-content-${tableName}`; // ← needed for update
+
+content.appendChild(selectAllWrapper);  // static checkbox
+content.appendChild(tableContentDiv);   // dynamic content
 
   // ✅ Append in correct order
   tableContainer.appendChild(header);
@@ -325,8 +326,9 @@ function renderRows(container, tableName, rows, page = 1) {
     html += `</div>`;
   }
 
-  container.innerHTML = html;
-
+  const contentDiv = document.getElementById(`table-content-${tableName}`);
+  if (contentDiv) contentDiv.innerHTML = html;
+  
   // ✅ Rebind guards after rendering
   bindSelectionGuards();
 }
