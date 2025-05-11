@@ -3,7 +3,8 @@
 
 const express = require('express');
 const cors = require('cors');
-const { getJson, uploadJson } = require('./jsonService');
+const { getJson, uploadJson, downloadAndSaveJson } = require('./jsonService');
+const { normalizeEnv } = require('./envHelper'); // ⬅️ Add this
 const path = require('path');
 const fs = require('fs');
 
@@ -26,7 +27,13 @@ app.get('/tables', async (req, res) => {
 app.get('/env-data', async (req, res) => {
   try {
     const { env } = req.query;
-    const jsonData = await getJson(env);
+    let jsonData = {};
+    console.log('env:', env);
+    if(env.includes('local')) {
+       jsonData = await getJson(env);
+    } else if(env.includes('remote')) {
+      jsonData = await getJson(env);
+    }
     res.json(jsonData);
   } catch (error) {
     console.error(error);
@@ -45,12 +52,25 @@ app.post('/migrate', async (req, res) => {
     } = req.body;
 
     const sourceJson = await getJson(sourceEnv) || {};
-    let targetJson = await getJson(targetEnv);
+    let targetJson = await getJson(targetEnv) || {};
     if (!targetJson || typeof targetJson !== 'object') targetJson = {};
 
     // ✅ Backup target before changes
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFilePath = path.join(__dirname, 'data', `backup-${targetEnv}-${timestamp}.json`);
+    const normalizedTargetEnv = normalizeEnv(targetEnv);
+    let data = 'data';
+    if(targetEnv.includes('local')) {
+      data = 'data/local';
+    } else if(targetEnv.includes('remote')) {
+      data = 'data/remote';
+    }
+    const backupDir = path.join(__dirname, data, `${normalizedTargetEnv}/en`);  // ✅ Define it
+    const backupFilePath = path.join(backupDir, `backup-${timestamp}.json`);
+    
+    console.log('normalizedTargetEnv', normalizedTargetEnv);
+    console.log('backupFilePath', backupFilePath);
+    
+    await fs.promises.mkdir(backupDir, { recursive: true });    
     await fs.promises.writeFile(backupFilePath, JSON.stringify(targetJson, null, 2));
 
     let tablesCopied = 0, rowsCopied = 0, tablesDeleted = 0, rowsDeleted = 0;
@@ -122,7 +142,7 @@ app.post('/migrate', async (req, res) => {
       }
     }
 
-    await uploadJson(targetEnv, targetJson);
+    await uploadJson(normalizedTargetEnv, targetJson);
 
     res.json({
       status: 'success',
@@ -134,6 +154,19 @@ app.post('/migrate', async (req, res) => {
   } catch (error) {
     console.error('Migration Failed:', error);
     res.status(500).json({ error: 'Failed to migrate data' });
+  }
+});
+
+app.get('/download-remote', async (req, res) => {
+  try {
+    const { env, lob } = req.query;
+    if (!env || !lob) return res.status(400).json({ error: 'Missing env or lob' });
+
+    await downloadAndSaveJson(env, lob);
+    res.json({ status: 'success' });
+  } catch (error) {
+    console.error('Download failed:', error.message);
+    res.status(500).json({ error: 'Failed to download remote JSON' });
   }
 });
 

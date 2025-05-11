@@ -16,26 +16,33 @@
     <div>
       <label>Source Env:</label>
       <select id="sourceEnv">
-        <option value="stage">Stage</option>
-        <option value="dev">Dev</option>
-        <option value="prod">Prod</option>
+        <option value="remote_dev">Remote Dev</option>
+        <option value="remote_stage">Remote Stage</option>
+        <option value="remote_prod">Remote Prod</option>
+        <option value="local_dev">Local Dev</option>
+        <option value="local_stage">Local Stage</option>
+        <option value="local_prod">Local Prod</option>
       </select>
     </div>
 
     <div>
       <label>Target Env:</label>
       <select id="targetEnv">
-        <option value="prod">Prod</option>
-        <option value="stage">Stage</option>
-        <option value="dev">Dev</option>
+        <option value="remote_dev">Remote Dev</option>
+        <option value="remote_stage">Remote Stage</option>
+        <option value="remote_prod">Remote Prod</option>
+        <option value="local_dev">Local Dev</option>
+        <option value="local_stage">Local Stage</option>
+        <option value="local_prod">Local Prod</option>
       </select>
     </div>
   </div>
 
   <!-- Static Buttons -->
   <div class="top-buttons" style="text-align:center;">
+    <button onclick="downloadRemoteJson()">📥 Download Remote JSON</button>
     <button onclick="loadTables()">Load Tables</button>
-    <button onclick="migrate()">Migrate Selected</button>
+    <button onclick="showMigrationPreview()">Migrate Selected</button>
     <button onclick="toggleAllTables(true)">Expand All</button>
     <button onclick="toggleAllTables(false)">Collapse All</button>
   </div>
@@ -74,6 +81,18 @@
       <div id="cellContent"></div>
     </div>
   </div>
+
+  <div id="previewModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closePreviewModal()">&times;</span>
+      <h2>Migration Preview</h2>
+      <div id="previewDetails" style="max-height: 400px; overflow-y: auto;"></div>
+      <div style="text-align:center; margin-top: 15px;">
+        <button onclick="confirmMigration()">✅ Confirm</button>
+        <button onclick="closePreviewModal()">❌ Cancel</button>
+      </div>
+    </div>
+  </div>  
 
   <!-- JavaScript -->
   <script src="app.js"></script>

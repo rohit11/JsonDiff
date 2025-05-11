@@ -91,9 +91,13 @@ function bindSelectionGuards() {
 // ✅ Load Data
 async function loadTables() {
   showLoading(true);
+  console.log('inside loadTables');
 
   const sourceEnv = document.getElementById('sourceEnv').value;
   const targetEnv = document.getElementById('targetEnv').value;
+
+  console.log(sourceEnv);
+  console.log(targetEnv);
 
   const [sourceRes, targetRes] = await Promise.all([
     fetch(`/env-data?env=${sourceEnv}`),
@@ -360,6 +364,109 @@ window.changeFilteredPage = (tableName, page) => {
   renderRows(container, tableName, rows, page);
 };
 
+function showMigrationPreview() {
+  const selectedTables = [...document.querySelectorAll('.tableCheckbox:checked')].map(cb => cb.getAttribute('data-table'));
+  const selectedRowCheckboxes = [...document.querySelectorAll('.columnCheckbox:checked')];
+  const selectedCellCheckboxes = [...document.querySelectorAll('.cellCheckbox:checked')];
+
+  const rowKeys = selectedRowCheckboxes.map(cb => ({
+    table: cb.dataset.table,
+    key: cb.dataset.key,
+    row: sourceData[cb.dataset.table]?.find(r => r.key === cb.dataset.key)
+  }));
+
+  const cellMap = new Map();
+  selectedCellCheckboxes.forEach(cb => {
+    const table = cb.dataset.table;
+    const key = cb.dataset.key;
+    const column = cb.dataset.column;
+    const mapKey = `${table}__${key}`;
+    if (!cellMap.has(mapKey)) {
+      cellMap.set(mapKey, {
+        table,
+        key,
+        row: sourceData[table]?.find(r => r.key === key),
+        columns: [column]
+      });
+    } else {
+      cellMap.get(mapKey).columns.push(column);
+    }
+  });
+
+  let fullTableRowCount = selectedTables.reduce((acc, table) => acc + (sourceData[table]?.length || 0), 0);
+  let html = `
+    <p><strong>Tables:</strong> ${selectedTables.length}</p>
+    <p><strong>Rows:</strong> ${fullTableRowCount + rowKeys.length}</p>
+    <p><strong>Cells:</strong> ${selectedCellCheckboxes.length}</p>
+  `;
+
+
+  if (selectedTables.length > 0) {
+    html += `<h3>📁 Full Tables</h3>`;
+    selectedTables.forEach(table => {
+      const rows = sourceData[table] || [];
+      if (rows.length === 0) return;
+  
+      const allKeys = Object.keys(rows[0] || {});
+      html += `<details open><summary>${table} (${rows.length} rows)</summary>
+        <div style="overflow-x:auto; max-height:300px; overflow-y:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${allKeys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            ${rows.map(row => `
+                <tr>${allKeys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(row[k] || '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+            `).join('')}
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+  
+
+  if (rowKeys.length > 0) {
+    html += `<h3>🔹 Selected Rows</h3>`;
+    rowKeys.forEach(({ table, key, row }) => {
+      if (!row) return;
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${Object.keys(row).map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            <tr>${Object.values(row).map(v => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(v || '').toString().replace(/`/g, '\\`')}\`)">${v}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+
+  if (cellMap.size > 0) {
+    html += `<h3>🔸 Selected Cells</h3>`;
+    for (const { table, key, row, columns } of cellMap.values()) {
+      if (!row) continue;
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${columns.map(c => `<th style="border:1px solid #ccc; padding:4px;">${c}</th>`).join('')}</tr>
+            <tr>${columns.map(c => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(row[c] || '').toString().replace(/`/g, '\\`')}\`)">${row[c]}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    }
+  }
+
+  document.getElementById('previewDetails').innerHTML = html;
+  document.getElementById('previewModal').style.display = 'block';
+}
+
+
+
+function closePreviewModal() {
+  document.getElementById('previewModal').style.display = 'none';
+}
+
+function confirmMigration() {
+  document.getElementById('previewModal').style.display = 'none';
+  migrate(); // Call original migration function
+}
+
 // ✅ Migrate Selected Rows or Tables
 async function migrate() {
   document.activeElement.blur();
@@ -371,6 +478,7 @@ async function migrate() {
   const cellSelectionMap = new Map(); // key: `${table}_${key}` → grouped columns
 
 for (const cb of selectedCellCheckboxes) {
+
   const table = cb.getAttribute('data-table');
   const key = cb.getAttribute('data-key');
   const column = cb.getAttribute('data-column');
@@ -429,9 +537,7 @@ const selectedCells = Array.from(cellSelectionMap.values());
     totalRows += (sourceData[table]?.length || 0);
   }
 
-  if (!confirm(`Are you sure you want to migrate ${selectedTables.length} tables and ${totalRows} rows to ${targetEnv}?`)) {
-    return;
-  }
+  console.log(`[MIGRATION] Tables: ${selectedTables.length}, Rows: ${selectedRows.length}, Cells: ${selectedCells.length}`);
 
   showLoading(true);
 
@@ -577,3 +683,41 @@ window.onclick = function(event) {
     modal.style.display = 'none';
   }
 };
+
+async function downloadRemoteJson() {
+  const sourceEnv = document.getElementById('sourceEnv').value;
+  const targetEnv = document.getElementById('targetEnv').value;
+  const lob = 'lob'; // Update if needed
+
+  const environments = [
+    { env: sourceEnv, label: 'Source' },
+    { env: targetEnv, label: 'Target' }
+  ];
+
+  showLoading(true);
+  try {
+    for (const { env, label } of environments) {
+      if (!env.startsWith('remote_') && !env.startsWith('local_')) {
+        console.warn(`⚠️ Skipping ${label} (${env}) — only remote/local allowed.`);
+        continue;
+      }
+
+      const response = await fetch(`/download-remote?env=${env}&lob=${lob}`);
+      const result = await response.json();
+
+      if (response.ok && result.status === 'success') {
+        console.log(`✅ ${label} JSON downloaded and saved.`);
+      } else {
+        console.warn(`❌ Failed to download ${label}: ${result.error}`);
+      }
+    }
+
+    alert('✅ Download completed for Source and Target (if valid).');
+  } catch (error) {
+    console.error('❌ Error downloading JSONs:', error);
+    alert('❌ Error during download. See console for details.');
+  } finally {
+    showLoading(false);
+  }
+}
+

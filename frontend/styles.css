@@ -223,18 +223,19 @@ body {
   
   .modal-content {
     background-color: #fff;
-    width: 500px;
-    height: 300px;
-    margin: auto;
-    margin-top: 10%;
-    padding: 20px 20px 10px 20px;
+    width: 95vw;
+    height: 90vh;
+    margin: 5vh auto;
+    padding: 20px;
     border-radius: 8px;
+    overflow-y: auto;
+    overflow-x: auto;
     position: relative;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
   }
+  
   
   .modal-content .close {
     position: absolute;
@@ -253,11 +254,16 @@ body {
   #cellContent {
     margin-top: 25px;
     overflow-y: auto;
-    flex-grow: 1;
+    max-height: 80vh;     /* Constrain height */
     font-size: 14px;
-    white-space: pre-wrap;
+    white-space: pre-wrap; /* Wrap long text */
     word-wrap: break-word;
+    padding: 10px;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    border-radius: 4px;
   }
+  
   
   .cellCheckbox {
     margin-right: 4px;
@@ -283,4 +289,18 @@ h1, .selectors, .filter-container, .top-buttons {
   padding: 10px 20px;
   background: #f9f9f9;
   z-index: 10;
+}
+
+#previewModal .modal-content {
+  width: 80vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal#cellModal {
+  z-index: 11000; /* Higher than preview modal */
+}
+
+.modal#previewModal {
+  z-index: 10000;
 }
