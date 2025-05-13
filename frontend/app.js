@@ -557,7 +557,6 @@ const selectedCells = Array.from(cellSelectionMap.values());
   showLoading(false);
 
   if (response.ok && result.status === 'success') {
-    alert('✅ Migration Complete!');
 
     const targetRes = await fetch(`/env-data?env=${targetEnv}`);
     targetData = await targetRes.json();
@@ -565,6 +564,24 @@ const selectedCells = Array.from(cellSelectionMap.values());
     clearAllSelections();
     filterAndRenderTables();
     //refreshTargetDataView(); // ✅ Important: refresh target after migrate
+
+    // After migration is completed
+const match = targetEnv.match(/^remote_([a-z]+)(_migrated)?_([a-z]+)$/);
+if (match) {
+  const lob = match[1];
+  const env = match[3];
+  const migratedKey = `remote_${lob}_migrated_${env}`;
+  const originalKey = `remote_${lob}_${env}`;
+
+  const compare = confirm(`✅ Migration to ${targetEnv} completed.\n\n🎯 Do you want to compare:\n\n${migratedKey} → ${originalKey}?`);
+
+  if (compare) {
+    document.getElementById('sourceEnv').value = migratedKey;
+    document.getElementById('targetEnv').value = originalKey;
+    loadTables(); // Trigger comparison
+  }
+}
+
   } else {
     alert(`❌ Migration Failed: ${result.error || 'Unknown error'}`);
   }
