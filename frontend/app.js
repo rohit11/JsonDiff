@@ -564,7 +564,7 @@ const selectedCells = Array.from(cellSelectionMap.values());
 
     clearAllSelections();
     filterAndRenderTables();
-    refreshTargetDataView(); // ✅ Important: refresh target after migrate
+    //refreshTargetDataView(); // ✅ Important: refresh target after migrate
   } else {
     alert(`❌ Migration Failed: ${result.error || 'Unknown error'}`);
   }
@@ -664,7 +664,6 @@ function renderSimpleTargetTable(container, tableName, rows, page = 1) {
 function bindStaticListeners() {
   document.getElementById('filterSelect').addEventListener('change', filterAndRenderTables);
 }
-window.onload = bindStaticListeners;
 
 function showCellModal(content) {
   const modal = document.getElementById('cellModal');
@@ -720,4 +719,65 @@ async function downloadRemoteJson() {
     showLoading(false);
   }
 }
+
+async function downloadJsonsForLobsAndEnvs(/*allLobs = [], allEnvs = []*/) {
+  const allLobs = ['eni', 'cns', 'umr', 'mnr', 'ifp'];
+  const allEnvs = ['remote_dev', 'remote_stage', 'remote_prod'];
+
+  if (!Array.isArray(allLobs) || !Array.isArray(allEnvs)) {
+    alert('❌ Invalid LOB or ENV list.');
+    return;
+  }
+
+  showLoading(true);
+  try {
+    for (const lob of allLobs) {
+      for (const env of allEnvs) {
+        const response = await fetch(`/download-remote?env=${env}&lob=${lob}`);
+        const result = await response.json();
+
+        if (response.ok && result.status === 'success') {
+          console.log(`✅ Downloaded: ${lob} / ${env}`);
+        } else {
+          console.warn(`❌ Failed: ${lob} / ${env} → ${result.error}`);
+        }
+      }
+    }
+
+    alert('✅ Download completed for all combinations.');
+  } catch (error) {
+    console.error('❌ Error in bulk download:', error);
+    alert('❌ Download failed. See console for details.');
+  } finally {
+    showLoading(false);
+  }
+}
+
+
+
+async function loadEnvOptions() {
+  try {
+    const res = await fetch('/env-options');       // 🔁 Fetch from backend
+    const options = await res.json();              // 📥 Parse JSON array
+
+    const sourceEnv = document.getElementById('sourceEnv');  // 🎯 Find <select> #sourceEnv
+    const targetEnv = document.getElementById('targetEnv');  // 🎯 Find <select> #targetEnv
+
+    const html = options.map(opt =>
+      `<option value="${opt.key}">${opt.label}</option>`
+    ).join('');                                     // 🔧 Generate <option> list
+
+    sourceEnv.innerHTML = html;                    // 🧩 Inject into dropdown
+    targetEnv.innerHTML = html;
+  } catch (err) {
+    console.error('Failed to load environment options:', err); // ❗ Debug errors
+  }
+}
+
+window.onload = function() {
+  console.log('✅ DOM loaded. Running loadEnvOptions...');
+  loadEnvOptions();       // 🚀 Load env options after DOM is ready
+  bindStaticListeners();  // 📦 Attach change listeners to dropdowns
+};
+
 

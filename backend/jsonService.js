@@ -6,16 +6,21 @@ const path = require('path');
 
 async function getJson(env) {
   console.log('getJson:', env);
-  const targetEnv = normalizeEnv(env);
-  const path = JSON_PATHS[targetEnv];
+  const path = JSON_PATHS[env];
   const data = await fs.readFile(path, 'utf-8');
   return JSON.parse(data);
 }
 
 async function uploadJson(env, jsonData) {
   console.log('uploadJson:', env);
-  const path = JSON_PATHS[env];
-  await fs.writeFile(path, JSON.stringify(jsonData, null, 2), 'utf-8');
+  const filePath = JSON_PATHS[env];
+
+  if (!filePath) throw new Error(`❌ No upload path defined for env: ${env}`);
+
+  const dir = path.dirname(filePath); // 🧭 get parent folder
+
+  await fs.mkdir(dir, { recursive: true }); // ✅ ensure folder exists
+  await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), 'utf-8'); // ✍️ write file
 }
 
 // ✅ New function: Download JSON from API and save locally
@@ -36,7 +41,7 @@ async function downloadAndSaveJson(env, lob) {
         } else if(env.includes('remote')) {
           data = 'data/remote';
         }
-        const backupDir = path.join(__dirname, data, `${targetEnv}/en`);  // ✅ Define it
+        const backupDir = path.join(__dirname, data, `${lob}/${targetEnv}/en`);  // ✅ Define it
         const backupFilePath = path.join(backupDir, `en.json`);
         
         console.log('backupDir:', backupDir);

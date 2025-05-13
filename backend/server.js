@@ -7,6 +7,7 @@ const { getJson, uploadJson, downloadAndSaveJson } = require('./jsonService');
 const { normalizeEnv } = require('./envHelper'); // ⬅️ Add this
 const path = require('path');
 const fs = require('fs');
+const { JSON_PATHS } = require('./config');
 
 const app = express();
 app.use(cors());
@@ -29,9 +30,9 @@ app.get('/env-data', async (req, res) => {
     const { env } = req.query;
     let jsonData = {};
     console.log('env:', env);
-    if(env.includes('local')) {
-       jsonData = await getJson(env);
-    } else if(env.includes('remote')) {
+    if (env.includes('local')) {
+      jsonData = await getJson(env);
+    } else if (env.includes('remote')) {
       jsonData = await getJson(env);
     }
     res.json(jsonData);
@@ -59,18 +60,34 @@ app.post('/migrate', async (req, res) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const normalizedTargetEnv = normalizeEnv(targetEnv);
     let data = 'data';
-    if(targetEnv.includes('local')) {
+    if (targetEnv.includes('local')) {
       data = 'data/local';
-    } else if(targetEnv.includes('remote')) {
+    } else if (targetEnv.includes('remote')) {
       data = 'data/remote';
     }
-    const backupDir = path.join(__dirname, data, `${normalizedTargetEnv}/en`);  // ✅ Define it
+    // ✨ Parse lob and env from normalizedTargetEnv (e.g., "eni_migrated_prod" or "eni_prod")
+    const parts = normalizedTargetEnv.split('_');
+    let lob = parts[0];
+    let env = parts.includes('migrated') ? parts[2] : parts[1];
+
+    // ✅ Compute target data folder
+    const dataRoot = targetEnv.includes('local') ? 'data/local' : 'data/remote';
+
+    // ✅ Final backup path → always write inside /en/migrated/
+    const backupDir = path.join(__dirname, dataRoot, lob, env, 'en', 'migrated');
     const backupFilePath = path.join(backupDir, `backup-${timestamp}.json`);
-    
+
+    console.log('Backup path:', backupFilePath);
+
+    // ✅ Ensure backup folder exists and save file
+    await fs.promises.mkdir(backupDir, { recursive: true });
+    await fs.promises.writeFile(backupFilePath, JSON.stringify(targetJson, null, 2));
+
+
     console.log('normalizedTargetEnv', normalizedTargetEnv);
     console.log('backupFilePath', backupFilePath);
-    
-    await fs.promises.mkdir(backupDir, { recursive: true });    
+
+    await fs.promises.mkdir(backupDir, { recursive: true });
     await fs.promises.writeFile(backupFilePath, JSON.stringify(targetJson, null, 2));
 
     let tablesCopied = 0, rowsCopied = 0, tablesDeleted = 0, rowsDeleted = 0;
@@ -142,7 +159,14 @@ app.post('/migrate', async (req, res) => {
       }
     }
 
-    await uploadJson(normalizedTargetEnv, targetJson);
+    // Write final output to migrated path
+    let migratedEnvKey = targetEnv;
+    if (!migratedEnvKey.includes('_migrated_')) {
+      migratedEnvKey = targetEnv.replace(/^remote_([a-z]+)_/, 'remote_$1_migrated_');
+    }
+        console.log('Writing migrated output to:', migratedEnvKey);
+    await uploadJson(migratedEnvKey, targetJson);
+
 
     res.json({
       status: 'success',
@@ -169,6 +193,31 @@ app.get('/download-remote', async (req, res) => {
     res.status(500).json({ error: 'Failed to download remote JSON' });
   }
 });
+
+
+app.get('/env-options', (req, res) => {
+  const options = [];
+
+  Object.keys(JSON_PATHS).forEach(key => {
+    const match = key.match(/^remote_([a-z]+)(_migrated)?_([a-z]+)$/);
+    if (!match) return;
+
+    const lob = match[1];
+    const isMigrated = !!match[2];
+    const env = match[3];
+
+    const label = `${lob.toUpperCase()} - ${capitalize(env)}${isMigrated ? ' (Migrated)' : ''}`;
+    options.push({ key, label });
+  });
+
+  console.log('[env-options] Generated options:', options); // ✅ Add this
+  res.json(options);
+});
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 
 
 app.listen(3000, () => console.log('Server running at http://localhost:3000'));

@@ -15,32 +15,18 @@
   <div class="selectors">
     <div>
       <label>Source Env:</label>
-      <select id="sourceEnv">
-        <option value="remote_dev">Remote Dev</option>
-        <option value="remote_stage">Remote Stage</option>
-        <option value="remote_prod">Remote Prod</option>
-        <option value="local_dev">Local Dev</option>
-        <option value="local_stage">Local Stage</option>
-        <option value="local_prod">Local Prod</option>
-      </select>
+      <select id="sourceEnv"></select>
     </div>
 
     <div>
       <label>Target Env:</label>
-      <select id="targetEnv">
-        <option value="remote_dev">Remote Dev</option>
-        <option value="remote_stage">Remote Stage</option>
-        <option value="remote_prod">Remote Prod</option>
-        <option value="local_dev">Local Dev</option>
-        <option value="local_stage">Local Stage</option>
-        <option value="local_prod">Local Prod</option>
-      </select>
+      <select id="targetEnv"></select>
     </div>
   </div>
 
   <!-- Static Buttons -->
   <div class="top-buttons" style="text-align:center;">
-    <button onclick="downloadRemoteJson()">📥 Download Remote JSON</button>
+    <button onclick="downloadJsonsForLobsAndEnvs()">📥 Download Remote JSON</button>
     <button onclick="loadTables()">Load Tables</button>
     <button onclick="showMigrationPreview()">Migrate Selected</button>
     <button onclick="toggleAllTables(true)">Expand All</button>
@@ -70,8 +56,8 @@
     </div>
 
     <!-- Target Data After Migration -->
-    <h2>Target Environment Data</h2>
-    <div id="targetData"></div>
+   <!-- <h2>Target Environment Data</h2>
+    <div id="targetData"></div> -->
   </div>
 
   <!-- Cell Detail Modal -->
