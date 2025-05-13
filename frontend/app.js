@@ -413,7 +413,8 @@ function showMigrationPreview() {
           <table style="border-collapse: collapse; width: 100%;">
             <tr>${allKeys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
             ${rows.map(row => `
-                <tr>${allKeys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(row[k] || '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+                <tr>${allKeys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${row.key}', '${k}', \`${(row[k] || '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>
+`).join('')}</tr>
             `).join('')}
           </table>
         </div>
@@ -430,7 +431,9 @@ function showMigrationPreview() {
         <div style="overflow-x:auto;">
           <table style="border-collapse: collapse; width: 100%;">
             <tr>${Object.keys(row).map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
-            <tr>${Object.values(row).map(v => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(v || '').toString().replace(/`/g, '\\`')}\`)">${v}</td>`).join('')}</tr>
+            <tr>${Object.keys(row).map(k => `
+              <td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${k}', \`${(row[k] || '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>
+            `).join('')}</tr>
           </table>
         </div>
       </details>`;
@@ -445,7 +448,8 @@ function showMigrationPreview() {
         <div style="overflow-x:auto;">
           <table style="border-collapse: collapse; width: 100%;">
             <tr>${columns.map(c => `<th style="border:1px solid #ccc; padding:4px;">${c}</th>`).join('')}</tr>
-            <tr>${columns.map(c => `<td style="border:1px solid #ccc; padding:4px;" onclick="showCellModal(\`${(row[c] || '').toString().replace(/`/g, '\\`')}\`)">${row[c]}</td>`).join('')}</tr>
+            <tr>${columns.map(c => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${c}', '${(row[c] || '').toString().replace(/'/g, "\\'")}')">${row[c]}</td>
+`).join('')}</tr>
           </table>
         </div>
       </details>`;
@@ -790,6 +794,40 @@ async function loadEnvOptions() {
     console.error('Failed to load environment options:', err); // ❗ Debug errors
   }
 }
+
+function showEditableCellModal(table, key, column, value) {
+  const modal = document.getElementById('cellModal');
+  const contentEl = document.getElementById('cellContent');
+  const primaryKey = tablePrimaryKeys[table] || 'key';
+
+  if (column === primaryKey) {
+    contentEl.innerHTML = `<p><strong>${column}</strong> is a primary key and cannot be edited.</p>`;
+  } else {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    input.style.width = '100%';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => {
+      const row = sourceData[table]?.find(r => r.key === key);
+      if (row) {
+        row[column] = input.value;
+        showMigrationPreview(); // re-render updated preview
+      }
+      closeCellModal();
+    };
+
+    contentEl.innerHTML = `<p><strong>Edit ${column}</strong></p>`;
+    contentEl.appendChild(input);
+    contentEl.appendChild(document.createElement('br'));
+    contentEl.appendChild(saveBtn);
+  }
+
+  modal.style.display = 'block';
+}
+
 
 window.onload = function() {
   console.log('✅ DOM loaded. Running loadEnvOptions...');
