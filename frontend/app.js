@@ -1020,3 +1020,81 @@ Object.keys(selectedCellKeysMap).forEach(mapKey => {
   }
 });
 
+function showMigrationPreview() {
+  const selectedTables = [...document.querySelectorAll('.tableCheckbox:checked')].map(cb => cb.getAttribute('data-table'));
+
+  const rowKeys = Object.keys(selectedRowKeysMap).map(mapKey => {
+    const [table, key] = mapKey.split('__');
+    const row = sourceData[table]?.find(r => r.key === key);
+    return { table, key, row };
+  });
+
+  const cellMap = new Map();
+  Object.keys(selectedCellKeysMap).forEach(mapKey => {
+    const { table, key, columns } = selectedCellKeysMap[mapKey];
+    const row = sourceData[table]?.find(r => r.key === key);
+    if (!row) return;
+    cellMap.set(mapKey, { table, key, row, columns });
+  });
+
+  const fullTableRowCount = selectedTables.reduce((acc, table) => acc + (sourceData[table]?.length || 0), 0);
+  let html = `
+    <p><strong>Tables:</strong> ${selectedTables.length}</p>
+    <p><strong>Rows:</strong> ${fullTableRowCount + rowKeys.length}</p>
+    <p><strong>Cells:</strong> ${cellMap.size}</p>
+  `;
+
+  if (selectedTables.length > 0) {
+    html += `<h3>📁 Full Tables</h3>`;
+    selectedTables.forEach(table => {
+      const rows = sourceData[table] || [];
+      if (rows.length === 0) return;
+      const allKeys = Object.keys(rows[0] || {}).filter(k => !excludeKeys.includes(k));
+      html += `<details open><summary>${table} (${rows.length} rows)</summary>
+        <div style="overflow-x:auto; max-height:300px; overflow-y:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${allKeys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            ${rows.map(row => `
+                <tr>${allKeys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${row.key}', '${k}', \`${(row[k] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+            `).join('')}
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+
+  if (rowKeys.length > 0) {
+    html += `<h3>🔹 Selected Rows</h3>`;
+    rowKeys.forEach(({ table, key, row }) => {
+      if (!row) return;
+      const keys = Object.keys(row).filter(k => !excludeKeys.includes(k));
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${keys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            <tr>${keys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${k}', \`${(row[k] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+
+  if (cellMap.size > 0) {
+    html += `<h3>🔸 Selected Cells</h3>`;
+    for (const { table, key, row, columns } of cellMap.values()) {
+      if (!row) continue;
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${columns.map(c => `<th style="border:1px solid #ccc; padding:4px;">${c}</th>`).join('')}</tr>
+            <tr>${columns.map(c => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${c}', \`${(row[c] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[c]}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    }
+  }
+
+  document.getElementById('previewDetails').innerHTML = html;
+  document.getElementById('previewModal').style.display = 'block';
+}
+
