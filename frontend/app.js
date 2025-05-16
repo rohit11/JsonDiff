@@ -835,4 +835,163 @@ window.onload = function() {
   bindStaticListeners();  // 📦 Attach change listeners to dropdowns
 };
 
+const selectedRowKeysMap = new Map();   // key: `${table}_${key}`
+const selectedCellKeysMap = new Map();  // key: `${table}_${key}_${column}`
+
+function bindSelectionGuards() {
+  document.querySelectorAll('.columnCheckbox').forEach(rowCb => {
+    rowCb.addEventListener('change', () => {
+      const table = rowCb.dataset.table;
+      const key = rowCb.dataset.key;
+      const compositeKey = `${table}_${key}`;
+      const checked = rowCb.checked;
+
+      if (checked) {
+        // Uncheck cell checkboxes for same row
+        document.querySelectorAll(`.cellCheckbox[data-table='${table}'][data-key='${key}']`)
+          .forEach(cb => {
+            cb.checked = false;
+            const cKey = `${table}_${key}_${cb.dataset.column}`;
+            selectedCellKeysMap.delete(cKey);
+          });
+        selectedRowKeysMap.set(compositeKey, true);
+      } else {
+        selectedRowKeysMap.delete(compositeKey);
+      }
+    });
+  });
+
+  document.querySelectorAll('.cellCheckbox').forEach(cellCb => {
+    cellCb.addEventListener('change', () => {
+      const table = cellCb.dataset.table;
+      const key = cellCb.dataset.key;
+      const column = cellCb.dataset.column;
+      const rowCb = document.querySelector(`.columnCheckbox[data-table='${table}'][data-key='${key}']`);
+      const cKey = `${table}_${key}_${column}`;
+      const checked = cellCb.checked;
+
+      if (checked && rowCb?.checked) {
+        alert('⚠️ Cannot select individual column when full row is selected.');
+        cellCb.checked = false;
+        return;
+      }
+
+      if (checked) {
+        selectedCellKeysMap.set(cKey, true);
+      } else {
+        selectedCellKeysMap.delete(cKey);
+      }
+    });
+  });
+}
+
+function renderRows(container, tableName, rows, page = 1) {
+  const start = (page - 1) * rowsPerPage;
+  const paginatedRows = rows.slice(start, start + rowsPerPage);
+
+  const allKeysSet = new Set();
+  rows.forEach(({ sourceRow, targetRow }) => {
+    const row = sourceRow || targetRow;
+    if (row) {
+      Object.keys(row).forEach(k => {
+        if (k !== 'key' && !excludeKeys.includes(k)) {
+          allKeysSet.add(k);
+        }
+      });
+    }
+  });
+  const allKeys = Array.from(allKeysSet);
+
+  let html = `<table><tr><th class="select-column">Select</th><th>Key</th>`;
+  allKeys.forEach(k => html += `<th>${capitalizeFirstLetter(k)}</th>`);
+  html += `</tr>`;
+
+  paginatedRows.forEach(({ sourceRow, targetRow }) => {
+    const rowKey = (sourceRow || targetRow)?.key;
+    const compositeKey = `${tableName}_${rowKey}`;
+    let rowClass = '';
+
+    const isMissingInTarget = sourceRow && !targetRow;
+    const isMissingInSource = targetRow && !sourceRow;
+    const isDiff = sourceRow && targetRow && hasDifferences(sourceRow, targetRow);
+    const isSame = sourceRow && targetRow && !isDiff;
+
+    if (isMissingInTarget || isMissingInSource) rowClass = 'missing-row';
+    else if (isDiff) rowClass = 'diff-row';
+    else rowClass = 'same-row';
+
+    html += `<tr class="${rowClass}">`;
+
+    // Checkbox
+    if (isSame) {
+      html += `<td></td>`;
+    } else {
+      const checked = selectedRowKeysMap.has(compositeKey) ? 'checked' : '';
+      html += `<td class="select-column"><input type="checkbox" class="columnCheckbox" data-table="${tableName}" data-key="${rowKey}" ${checked}></td>`;
+    }
+
+    // Key Cell
+    html += `<td onclick="showCellModal(\`${rowKey}\`)">${rowKey || ''}</td>`;
+
+    // Data Cells
+    allKeys.forEach(k => {
+      const val = sourceRow?.[k];
+      const safeVal = (val === false || val === 0) ? val : (val || '');
+      const className = (rowClass === 'diff-row' && sourceRow && targetRow && val !== targetRow[k] && !excludeKeys.includes(k))
+        ? 'child-diff-highlight'
+        : '';
+
+      const cKey = `${tableName}_${rowKey}_${k}`;
+      const checked = selectedCellKeysMap.has(cKey) ? 'checked' : '';
+
+      if (isSame) {
+        html += `<td onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</td>`;
+      } else {
+        html += `<td class="${className}">
+          <input type="checkbox" class="cellCheckbox" data-table="${tableName}" data-key="${rowKey}" data-column="${k}" ${checked}
+                 style="margin-right:4px; vertical-align:middle;">
+          <span onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</span>
+        </td>`;
+      }
+    });
+
+    html += `</tr>`;
+
+    // Destination Row
+    if (isDiff || isMissingInSource) {
+      const childClass = isMissingInSource ? 'missing-row' : 'child-diff-row';
+      html += `<tr class="${childClass}">`;
+      html += `<td><em>Destination</em></td>`;
+      html += `<td>${targetRow?.key || ''}</td>`;
+
+      allKeys.forEach(k => {
+        const sourceVal = sourceRow?.[k] ?? '';
+        const targetVal = targetRow?.[k] ?? '';
+        const isDiffField = sourceVal !== targetVal && !excludeKeys.includes(k);
+        const cellClass = isDiffField ? 'child-diff-highlight' : '';
+        const safeVal = (targetVal === false || targetVal === 0) ? targetVal : (targetVal || '');
+
+        html += `<td class="${cellClass}" onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</td>`;
+      });
+
+      html += `</tr>`;
+    }
+  });
+
+  html += `</table>`;
+
+  const totalPages = Math.ceil(rows.length / rowsPerPage);
+  if (totalPages > 1) {
+    html += `<div class="pagination">`;
+    for (let p = 1; p <= totalPages; p++) {
+      html += `<button class="${p === page ? 'current-page' : ''}" onclick="changeFilteredPage('${tableName}', ${p})">${p}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Rebind checkbox behavior
+  bindSelectionGuards();
+}
 
