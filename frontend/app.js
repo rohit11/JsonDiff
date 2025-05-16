@@ -995,3 +995,28 @@ function renderRows(container, tableName, rows, page = 1) {
   bindSelectionGuards();
 }
 
+// Build selected row info from preserved map
+const rowKeys = Object.keys(selectedRowKeysMap).map(mapKey => {
+  const [table, key] = mapKey.split('__');
+  return {
+    table,
+    key,
+    row: sourceData[table]?.find(r => r.key === key)
+  };
+});
+
+// Build selected cell info from preserved map
+const cellMap = new Map();
+Object.keys(selectedCellKeysMap).forEach(mapKey => {
+  const [table, key, column] = mapKey.split('__');
+  const row = sourceData[table]?.find(r => r.key === key);
+  if (!row) return;
+
+  const id = `${table}__${key}`;
+  if (!cellMap.has(id)) {
+    cellMap.set(id, { table, key, row, columns: [column] });
+  } else {
+    cellMap.get(id).columns.push(column);
+  }
+});
+
