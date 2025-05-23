@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Escape HTML characters to safely render in browser
 function escapeHtml(str) {
   return str.replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -20,57 +19,49 @@ function generateSideBySideHtmlDiff(leftJson, rightJson, outputPath) {
   <html><head><meta charset="UTF-8">
   <style>
     body { margin: 0; background: #1e1e1e; color: #ccc; font-family: monospace; }
-    .container { display: flex; }
-    .pane { width: 50%; white-space: pre; padding: 10px; box-sizing: border-box; overflow-x: auto; }
-    .line {
-      display: block;
-      padding: 1px 4px;
-      min-height: 1em;
+    .container { display: flex; flex-direction: column; }
+    .row { display: flex; width: 100%; }
+    .pane {
+      width: 50%;
+      box-sizing: border-box;
+      padding: 0;
       white-space: pre-wrap;
-      word-break: break-word;
+      overflow-x: auto;
+    }
+    .line {
+      padding: 2px 6px;
+      font-family: monospace;
+      min-height: 1em;
     }
     .added { background: #144212; color: #b5f1b5; }
     .removed { background: #600; color: #fbb; }
     .changed { background: #604000; color: #ffe5b4; }
     .same { background: #1e1e1e; }
-  </style></head><body><div class="container">
-    <div class="pane left">
-  `;
+  </style>
+  </head><body><div class="container">`;
 
-  // LEFT SIDE
   for (let i = 0; i < maxLines; i++) {
     const leftLine = escapeHtml(leftLines[i] || '');
     const rightLine = escapeHtml(rightLines[i] || '');
 
     let cls = 'same';
     if (!rightLines[i]) cls = 'removed';
+    else if (!leftLines[i]) cls = 'added';
     else if (leftLine !== rightLine) cls = 'changed';
 
-    html += `<div class="line ${cls}">${leftLine}</div>`;
+    html += `
+      <div class="row">
+        <div class="pane"><div class="line ${cls}">${leftLine}</div></div>
+        <div class="pane"><div class="line ${cls}">${rightLine}</div></div>
+      </div>`;
   }
 
-  html += `</div><div class="pane right">`;
-
-  // RIGHT SIDE
-  for (let i = 0; i < maxLines; i++) {
-    const leftLine = escapeHtml(leftLines[i] || '');
-    const rightLine = escapeHtml(rightLines[i] || '');
-
-    let cls = 'same';
-    if (!leftLines[i]) cls = 'added';
-    else if (leftLine !== rightLine) cls = 'changed';
-
-    html += `<div class="line ${cls}">${rightLine}</div>`;
-  }
-
-  html += `</div></div></body></html>`;
+  html += `</div></body></html>`;
   fs.writeFileSync(outputPath, html, 'utf-8');
-  console.log(`✅ Side-by-side diff written to: ${outputPath}`);
+  console.log(`✅ Diff written to: ${outputPath}`);
 }
 
 // --- ENTRY POINT ---
-// Update these paths based on your folder structure
 const leftJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../backend/data/remote/umr/prod/en/en.json')));
 const rightJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../backend/data/remote/umr/prod/en/migrated/en.json')));
-
 generateSideBySideHtmlDiff(leftJson, rightJson, 'json_diff.html');
