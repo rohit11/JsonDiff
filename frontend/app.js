@@ -835,4 +835,266 @@ window.onload = function() {
   bindStaticListeners();  // 📦 Attach change listeners to dropdowns
 };
 
+const selectedRowKeysMap = new Map();   // key: `${table}_${key}`
+const selectedCellKeysMap = new Map();  // key: `${table}_${key}_${column}`
+
+function bindSelectionGuards() {
+  document.querySelectorAll('.columnCheckbox').forEach(rowCb => {
+    rowCb.addEventListener('change', () => {
+      const table = rowCb.dataset.table;
+      const key = rowCb.dataset.key;
+      const compositeKey = `${table}_${key}`;
+      const checked = rowCb.checked;
+
+      if (checked) {
+        // Uncheck cell checkboxes for same row
+        document.querySelectorAll(`.cellCheckbox[data-table='${table}'][data-key='${key}']`)
+          .forEach(cb => {
+            cb.checked = false;
+            const cKey = `${table}_${key}_${cb.dataset.column}`;
+            selectedCellKeysMap.delete(cKey);
+          });
+        selectedRowKeysMap.set(compositeKey, true);
+      } else {
+        selectedRowKeysMap.delete(compositeKey);
+      }
+    });
+  });
+
+  document.querySelectorAll('.cellCheckbox').forEach(cellCb => {
+    cellCb.addEventListener('change', () => {
+      const table = cellCb.dataset.table;
+      const key = cellCb.dataset.key;
+      const column = cellCb.dataset.column;
+      const rowCb = document.querySelector(`.columnCheckbox[data-table='${table}'][data-key='${key}']`);
+      const cKey = `${table}_${key}_${column}`;
+      const checked = cellCb.checked;
+
+      if (checked && rowCb?.checked) {
+        alert('⚠️ Cannot select individual column when full row is selected.');
+        cellCb.checked = false;
+        return;
+      }
+
+      if (checked) {
+        selectedCellKeysMap.set(cKey, true);
+      } else {
+        selectedCellKeysMap.delete(cKey);
+      }
+    });
+  });
+}
+
+function renderRows(container, tableName, rows, page = 1) {
+  const start = (page - 1) * rowsPerPage;
+  const paginatedRows = rows.slice(start, start + rowsPerPage);
+
+  const allKeysSet = new Set();
+  rows.forEach(({ sourceRow, targetRow }) => {
+    const row = sourceRow || targetRow;
+    if (row) {
+      Object.keys(row).forEach(k => {
+        if (k !== 'key' && !excludeKeys.includes(k)) {
+          allKeysSet.add(k);
+        }
+      });
+    }
+  });
+  const allKeys = Array.from(allKeysSet);
+
+  let html = `<table><tr><th class="select-column">Select</th><th>Key</th>`;
+  allKeys.forEach(k => html += `<th>${capitalizeFirstLetter(k)}</th>`);
+  html += `</tr>`;
+
+  paginatedRows.forEach(({ sourceRow, targetRow }) => {
+    const rowKey = (sourceRow || targetRow)?.key;
+    const compositeKey = `${tableName}_${rowKey}`;
+    let rowClass = '';
+
+    const isMissingInTarget = sourceRow && !targetRow;
+    const isMissingInSource = targetRow && !sourceRow;
+    const isDiff = sourceRow && targetRow && hasDifferences(sourceRow, targetRow);
+    const isSame = sourceRow && targetRow && !isDiff;
+
+    if (isMissingInTarget || isMissingInSource) rowClass = 'missing-row';
+    else if (isDiff) rowClass = 'diff-row';
+    else rowClass = 'same-row';
+
+    html += `<tr class="${rowClass}">`;
+
+    // Checkbox
+    if (isSame) {
+      html += `<td></td>`;
+    } else {
+      const checked = selectedRowKeysMap.has(compositeKey) ? 'checked' : '';
+      html += `<td class="select-column"><input type="checkbox" class="columnCheckbox" data-table="${tableName}" data-key="${rowKey}" ${checked}></td>`;
+    }
+
+    // Key Cell
+    html += `<td onclick="showCellModal(\`${rowKey}\`)">${rowKey || ''}</td>`;
+
+    // Data Cells
+    allKeys.forEach(k => {
+      const val = sourceRow?.[k];
+      const safeVal = (val === false || val === 0) ? val : (val || '');
+      const className = (rowClass === 'diff-row' && sourceRow && targetRow && val !== targetRow[k] && !excludeKeys.includes(k))
+        ? 'child-diff-highlight'
+        : '';
+
+      const cKey = `${tableName}_${rowKey}_${k}`;
+      const checked = selectedCellKeysMap.has(cKey) ? 'checked' : '';
+
+      if (isSame) {
+        html += `<td onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</td>`;
+      } else {
+        html += `<td class="${className}">
+          <input type="checkbox" class="cellCheckbox" data-table="${tableName}" data-key="${rowKey}" data-column="${k}" ${checked}
+                 style="margin-right:4px; vertical-align:middle;">
+          <span onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</span>
+        </td>`;
+      }
+    });
+
+    html += `</tr>`;
+
+    // Destination Row
+    if (isDiff || isMissingInSource) {
+      const childClass = isMissingInSource ? 'missing-row' : 'child-diff-row';
+      html += `<tr class="${childClass}">`;
+      html += `<td><em>Destination</em></td>`;
+      html += `<td>${targetRow?.key || ''}</td>`;
+
+      allKeys.forEach(k => {
+        const sourceVal = sourceRow?.[k] ?? '';
+        const targetVal = targetRow?.[k] ?? '';
+        const isDiffField = sourceVal !== targetVal && !excludeKeys.includes(k);
+        const cellClass = isDiffField ? 'child-diff-highlight' : '';
+        const safeVal = (targetVal === false || targetVal === 0) ? targetVal : (targetVal || '');
+
+        html += `<td class="${cellClass}" onclick="showCellModal(\`${String(safeVal).replace(/`/g, '\\`')}\`)">${safeVal}</td>`;
+      });
+
+      html += `</tr>`;
+    }
+  });
+
+  html += `</table>`;
+
+  const totalPages = Math.ceil(rows.length / rowsPerPage);
+  if (totalPages > 1) {
+    html += `<div class="pagination">`;
+    for (let p = 1; p <= totalPages; p++) {
+      html += `<button class="${p === page ? 'current-page' : ''}" onclick="changeFilteredPage('${tableName}', ${p})">${p}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Rebind checkbox behavior
+  bindSelectionGuards();
+}
+
+// Build selected row info from preserved map
+const rowKeys = Object.keys(selectedRowKeysMap).map(mapKey => {
+  const [table, key] = mapKey.split('__');
+  return {
+    table,
+    key,
+    row: sourceData[table]?.find(r => r.key === key)
+  };
+});
+
+// Build selected cell info from preserved map
+const cellMap = new Map();
+Object.keys(selectedCellKeysMap).forEach(mapKey => {
+  const [table, key, column] = mapKey.split('__');
+  const row = sourceData[table]?.find(r => r.key === key);
+  if (!row) return;
+
+  const id = `${table}__${key}`;
+  if (!cellMap.has(id)) {
+    cellMap.set(id, { table, key, row, columns: [column] });
+  } else {
+    cellMap.get(id).columns.push(column);
+  }
+});
+
+function showMigrationPreview() {
+  const selectedTables = [...document.querySelectorAll('.tableCheckbox:checked')].map(cb => cb.getAttribute('data-table'));
+
+  const rowKeys = Object.keys(selectedRowKeysMap).map(mapKey => {
+    const [table, key] = mapKey.split('__');
+    const row = sourceData[table]?.find(r => r.key === key);
+    return { table, key, row };
+  });
+
+  const cellMap = new Map();
+  Object.keys(selectedCellKeysMap).forEach(mapKey => {
+    const { table, key, columns } = selectedCellKeysMap[mapKey];
+    const row = sourceData[table]?.find(r => r.key === key);
+    if (!row) return;
+    cellMap.set(mapKey, { table, key, row, columns });
+  });
+
+  const fullTableRowCount = selectedTables.reduce((acc, table) => acc + (sourceData[table]?.length || 0), 0);
+  let html = `
+    <p><strong>Tables:</strong> ${selectedTables.length}</p>
+    <p><strong>Rows:</strong> ${fullTableRowCount + rowKeys.length}</p>
+    <p><strong>Cells:</strong> ${cellMap.size}</p>
+  `;
+
+  if (selectedTables.length > 0) {
+    html += `<h3>📁 Full Tables</h3>`;
+    selectedTables.forEach(table => {
+      const rows = sourceData[table] || [];
+      if (rows.length === 0) return;
+      const allKeys = Object.keys(rows[0] || {}).filter(k => !excludeKeys.includes(k));
+      html += `<details open><summary>${table} (${rows.length} rows)</summary>
+        <div style="overflow-x:auto; max-height:300px; overflow-y:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${allKeys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            ${rows.map(row => `
+                <tr>${allKeys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${row.key}', '${k}', \`${(row[k] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+            `).join('')}
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+
+  if (rowKeys.length > 0) {
+    html += `<h3>🔹 Selected Rows</h3>`;
+    rowKeys.forEach(({ table, key, row }) => {
+      if (!row) return;
+      const keys = Object.keys(row).filter(k => !excludeKeys.includes(k));
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${keys.map(k => `<th style="border:1px solid #ccc; padding:4px;">${k}</th>`).join('')}</tr>
+            <tr>${keys.map(k => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${k}', \`${(row[k] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[k]}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    });
+  }
+
+  if (cellMap.size > 0) {
+    html += `<h3>🔸 Selected Cells</h3>`;
+    for (const { table, key, row, columns } of cellMap.values()) {
+      if (!row) continue;
+      html += `<details open><summary>${table} → key: ${key}</summary>
+        <div style="overflow-x:auto;">
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr>${columns.map(c => `<th style="border:1px solid #ccc; padding:4px;">${c}</th>`).join('')}</tr>
+            <tr>${columns.map(c => `<td style="border:1px solid #ccc; padding:4px;" onclick="showEditableCellModal('${table}', '${key}', '${c}', \`${(row[c] ?? '').toString().replace(/`/g, '\\`')}\`)">${row[c]}</td>`).join('')}</tr>
+          </table>
+        </div>
+      </details>`;
+    }
+  }
+
+  document.getElementById('previewDetails').innerHTML = html;
+  document.getElementById('previewModal').style.display = 'block';
+}
 
